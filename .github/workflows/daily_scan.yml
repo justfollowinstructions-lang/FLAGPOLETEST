@@ -1,0 +1,135 @@
+name: NSE Flag & Pole Daily Scan
+
+on:
+  schedule:
+    # 10:30 UTC = 4:00 PM IST, Monday-Friday (30 min after NSE close)
+    - cron: "30 10 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      full_refresh:
+        description: "Wipe and redownload all historical data"
+        type: boolean
+        default: false
+      refresh_universe:
+        description: "Force-refresh the NSE symbol list"
+        type: boolean
+        default: false
+      debug_symbol:
+        description: "Run verbose diagnosis for a single symbol (e.g. TCS.NS) instead of a full scan"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # 6 hours — comfortable margin for first full-refresh run
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore data cache (Parquet files + symbol list + signal DB)
+        id: data-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/daily/
+            data/nse_symbols.json
+            data/nse_symbol_meta.json
+            data/scanner.db
+          key: nse-data-${{ github.run_id }}
+          restore-keys: |
+            nse-data-
+
+      - name: Report cache status
+        run: |
+          if [ "${{ steps.data-cache.outputs.cache-hit }}" == "true" ]; then
+            echo "Exact cache hit — using prior run's data."
+          else
+            echo "No exact cache hit — restored from most recent available cache (or starting fresh on first run)."
+          fi
+          echo "Parquet files present: $(find data/daily -name '*.parquet' 2>/dev/null | wc -l)"
+
+      - name: Run Flag & Pole scanner
+        env:
+          PYTHONUNBUFFERED: "1"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          ARGS=""
+          if [ "${{ inputs.full_refresh }}" == "true" ]; then
+            ARGS="$ARGS --full-refresh"
+          fi
+          if [ "${{ inputs.refresh_universe }}" == "true" ]; then
+            ARGS="$ARGS --refresh-universe"
+          fi
+          if [ -n "${{ inputs.debug_symbol }}" ]; then
+            ARGS="$ARGS --debug-symbol ${{ inputs.debug_symbol }}"
+          fi
+          echo "Running: python main_flag_pole.py $ARGS"
+          python main_flag_pole.py $ARGS
+
+      - name: Save data cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/daily/
+            data/nse_symbols.json
+            data/nse_symbol_meta.json
+            data/scanner.db
+          key: nse-data-${{ github.run_id }}
+
+      - name: Export visual chart review
+        # Skipped in --debug-symbol mode: that mode doesn't run a full
+        # scan or write today's signals, so there's nothing to chart.
+        if: ${{ always() && !inputs.debug_symbol }}
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: python chart_export.py
+
+      - name: Upload Excel report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flag-pole-report-${{ github.run_number }}
+          path: reports/*.xlsx
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Upload chart viewer (expires in 2 days — open locally, no hosting)
+        if: ${{ always() && !inputs.debug_symbol }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: flag-pole-charts-${{ github.run_number }}
+          path: charts/*.html
+          retention-days: 2
+          if-no-files-found: warn
+
+      - name: Upload logs (for debugging failed runs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-logs-${{ github.run_number }}
+          path: logs/*.log
+          retention-days: 14
+          if-no-files-found: ignore
