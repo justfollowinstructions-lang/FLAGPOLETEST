@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flag &amp; Pole Chart Review — __SCAN_DATE__</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922; --orange: #ffa657;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 13px; height: 100vh; overflow: hidden;
+  }
+  #app { display: flex; height: 100vh; }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 300px; min-width: 300px; background: var(--panel);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  }
+  #sidebar-header { padding: 12px; border-bottom: 1px solid var(--border); }
+  #sidebar-header h1 { font-size: 14px; margin: 0 0 4px 0; }
+  #sidebar-header .meta { color: var(--muted); font-size: 11px; line-height: 1.6; }
+  #search {
+    margin: 8px 12px; padding: 6px 8px; width: calc(100% - 24px);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 12px;
+  }
+  #symbol-list { flex: 1; overflow-y: auto; padding-bottom: 12px; }
+  .group-header {
+    padding: 8px 12px 4px 12px; font-size: 11px; font-weight: 600;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .sym-item {
+    padding: 7px 12px; cursor: pointer; display: flex; justify-content: space-between;
+    align-items: center; border-left: 3px solid transparent;
+  }
+  .sym-item:hover { background: #1c2128; }
+  .sym-item.active { background: #1c2128; border-left-color: var(--accent); }
+  .sym-item .sym-name { font-weight: 600; }
+  .sym-item .sym-sub { color: var(--muted); font-size: 10.5px; }
+  .badge {
+    display: inline-block; padding: 1px 6px; border-radius: 10px;
+    font-size: 10.5px; font-weight: 600;
+  }
+  .badge-high { background: rgba(63,185,80,0.18); color: var(--green); }
+  .badge-med  { background: rgba(210,153,34,0.18); color: var(--yellow); }
+  .badge-low  { background: rgba(139,148,158,0.18); color: var(--muted); }
+  .sym-tabs { margin-top: 2px; }
+  .sym-tabs span {
+    font-size: 9px; color: var(--muted); background: #1c2128;
+    padding: 1px 5px; border-radius: 8px; margin-right: 3px;
+  }
+
+  /* ── Main ── */
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #topbar {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  #topbar .sym-title { font-size: 16px; font-weight: 700; }
+  #topbar .sym-company { color: var(--muted); font-size: 12px; }
+  #tf-toggle { display: flex; gap: 4px; margin-left: auto; }
+  #tf-toggle button, #nav-buttons button {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  #tf-toggle button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #nav-buttons { display: flex; gap: 6px; }
+  #nav-buttons button:hover, #tf-toggle button:hover { border-color: var(--accent); }
+
+  #stats-row {
+    display: flex; gap: 20px; padding: 8px 16px; border-bottom: 1px solid var(--border);
+    flex-wrap: wrap; font-size: 12px; background: #0a0d12;
+  }
+  #stats-row .stat { display: flex; flex-direction: column; gap: 2px; }
+  #stats-row .stat .label { color: var(--muted); font-size: 10.5px; text-transform: uppercase; }
+  #stats-row .stat .value { font-weight: 600; }
+
+  #legend-row {
+    display: flex; gap: 16px; align-items: center; padding: 6px 16px;
+    border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted);
+    flex-wrap: wrap;
+  }
+  #legend-row span { display: flex; align-items: center; gap: 5px; }
+  #legend-row i {
+    display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+  }
+
+  #reasons-panel {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: #0f1420; display: none;
+  }
+  #reasons-panel.visible { display: block; }
+  #reasons-panel .thesis { font-size: 12.5px; line-height: 1.55; }
+  #reasons-panel .sub-line {
+    margin-top: 6px; font-size: 11px; color: var(--muted); line-height: 1.5;
+  }
+  #reasons-panel .sub-line b { color: var(--text); font-weight: 600; }
+  #reasons-panel .tag-row { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  #reasons-panel .tag {
+    background: rgba(88,166,255,0.14); color: var(--accent);
+    padding: 2px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 600;
+  }
+
+  #btn-all-tf {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  #btn-all-tf:hover { border-color: var(--accent); }
+
+  #chart-container { flex: 1; position: relative; min-height: 0; }
+  #chart { width: 100%; height: 100%; }
+
+  #replay-bar {
+    padding: 10px 16px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; background: var(--panel);
+  }
+  #replay-bar button {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  #replay-bar button:hover { border-color: var(--accent); }
+  #replay-slider { flex: 1; }
+  #replay-date { color: var(--muted); font-size: 11.5px; min-width: 90px; }
+  #speed-select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 4px 6px; font-size: 12px;
+  }
+  #empty-state {
+    display: flex; align-items: center; justify-content: center; height: 100%;
+    color: var(--muted); font-size: 13px; text-align: center; padding: 20px;
+  }
+  .hint { color: var(--muted); font-size: 11px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>Flag &amp; Pole Chart Review</h1>
+      <div class="meta">
+        Scan date: __SCAN_DATE__<br>
+        Market trend: __MARKET_TREND__ (__DISTRIBUTION_DAYS__ distribution days)<br>
+        __SYMBOL_COUNT__ symbols · expires with this artifact in 2 days
+      </div>
+    </div>
+    <input id="search" type="text" placeholder="Filter symbols…">
+    <div id="symbol-list"></div>
+  </div>
+
+  <div id="main">
+    <div id="topbar">
+      <div>
+        <div class="sym-title" id="hdr-symbol">—</div>
+        <div class="sym-company" id="hdr-company">Select a symbol from the left</div>
+      </div>
+      <div id="nav-buttons">
+        <button id="btn-prev-symbol" title="Previous symbol (↑)">↑ Prev</button>
+        <button id="btn-next-symbol" title="Next symbol (↓)">↓ Next</button>
+      </div>
+      <div id="tf-toggle">
+        <button data-tf="1D" class="active">1D</button>
+        <button data-tf="1W">1W</button>
+        <button data-tf="1M">1M</button>
+        <button id="btn-all-tf" title="Open 1D + 1W + 1M together in a new window">⊞ All Timeframes</button>
+      </div>
+    </div>
+
+    <div id="stats-row"></div>
+    <div id="reasons-panel">
+      <div class="thesis" id="reasons-thesis"></div>
+      <div class="sub-line" id="reasons-detail"></div>
+      <div class="tag-row" id="reasons-tags"></div>
+    </div>
+    <div id="legend-row">
+      <span><i style="background:#bc8cff"></i>Pole</span>
+      <span><i style="background:#d29922"></i>Flag channel</span>
+      <span><i style="background:#58a6ff"></i>Pivot</span>
+      <span><i style="background:#f85149"></i>Stop</span>
+      <span><i style="background:#3fb950"></i>T1 / T2</span>
+      <span class="hint">— pole line and flag channel draw in as replay reaches them</span>
+      <span class="hint">· pattern is detected on daily bars only — 1W/1M are the same pattern viewed zoomed out, not separately measured</span>
+    </div>
+
+    <div id="chart-container">
+      <div id="chart"></div>
+      <div id="empty-state">Pick a symbol on the left to load its chart.<br>
+        <span class="hint">Space = play/pause · ←/→ = step one bar · ↑/↓ = switch symbol</span>
+      </div>
+    </div>
+
+    <div id="replay-bar" style="display:none;">
+      <button id="btn-jump-start" title="Jump to pattern start">|◀</button>
+      <button id="btn-play" title="Play / Pause (Space)">▶</button>
+      <button id="btn-step-back" title="Step back one bar (←)">◀</button>
+      <button id="btn-step-fwd" title="Step forward one bar (→)">▶|</button>
+      <button id="btn-jump-end" title="Jump to latest">▶▶|</button>
+      <input id="replay-slider" type="range" min="0" max="0" value="0">
+      <span id="replay-date">—</span>
+      <select id="speed-select">
+        <option value="600">0.5x</option>
+        <option value="300" selected>1x</option>
+        <option value="150">2x</option>
+        <option value="60">4x</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<script>
+/*__LIGHTWEIGHT_CHARTS_JS__*/
+</script>
+
+<script>
+const DATA = /*__CHART_DATA_JSON__*/;
+
+// ─────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────
+let currentSymbolIdx = -1;
+let currentTF = "1D";
+let currentBars = [];
+let replayIdx = 0;
+let playing = false;
+let playTimer = null;
+
+let chart = null, candleSeries = null, volumeSeries = null;
+let poleLineSeries = null, flagUpperSeries = null, flagLowerSeries = null;
+
+const flatSymbols = DATA.symbols;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sidebar
+// ─────────────────────────────────────────────────────────────────────────
+function qualityBadgeClass(score) {
+  if (score >= 70) return "badge-high";
+  if (score >= 40) return "badge-med";
+  return "badge-low";
+}
+
+function renderSidebar(filterText) {
+  const list = document.getElementById("symbol-list");
+  list.innerHTML = "";
+  const ft = (filterText || "").toUpperCase();
+
+  Object.keys(DATA.tab_labels).forEach(tabKey => {
+    const label = DATA.tab_labels[tabKey];
+    const items = flatSymbols.filter(s => s.tabs.includes(tabKey));
+    const shown = items.filter(s => !ft || s.symbol.toUpperCase().includes(ft) ||
+                                       (s.company_name || "").toUpperCase().includes(ft));
+    if (shown.length === 0) return;
+
+    const gh = document.createElement("div");
+    gh.className = "group-header";
+    gh.textContent = `${label} (${shown.length})`;
+    list.appendChild(gh);
+    shown.forEach(s => list.appendChild(buildSymbolItem(s)));
+  });
+}
+
+function buildSymbolItem(s) {
+  const idx = flatSymbols.indexOf(s);
+  const el = document.createElement("div");
+  el.className = "sym-item" + (idx === currentSymbolIdx ? " active" : "");
+  el.dataset.idx = idx;
+  const otherTabs = s.tabs.map(t => DATA.tab_labels[t].replace(/^\S+\s/, "")); // drop the emoji for compactness
+  el.innerHTML = `
+    <div>
+      <div class="sym-name">${s.symbol.replace('.NS', '')}</div>
+      <div class="sym-sub">${s.signal_type || s.status || ""}</div>
+      <div class="sym-tabs">${otherTabs.map(t => `<span>${t}</span>`).join("")}</div>
+    </div>
+    <span class="badge ${qualityBadgeClass(s.quality_score)}">${Math.round(s.quality_score)}</span>
+  `;
+  el.addEventListener("click", () => selectSymbol(idx));
+  return el;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Chart setup
+// ─────────────────────────────────────────────────────────────────────────
+function initChart() {
+  const container = document.getElementById("chart");
+  chart = LightweightCharts.createChart(container, {
+    layout: { background: { color: "#0d1117" }, textColor: "#e6edf3" },
+    grid: { vertLines: { color: "#1c2128" }, horzLines: { color: "#1c2128" } },
+    rightPriceScale: { borderColor: "#30363d" },
+    timeScale: { borderColor: "#30363d", timeVisible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+
+  candleSeries = chart.addCandlestickSeries({
+    upColor: "#3fb950", downColor: "#f85149",
+    borderUpColor: "#3fb950", borderDownColor: "#f85149",
+    wickUpColor: "#3fb950", wickDownColor: "#f85149",
+    priceScaleId: "right",
+  });
+  candleSeries.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.28 } });
+
+  volumeSeries = chart.addHistogramSeries({
+    priceFormat: { type: "volume" },
+    priceScaleId: "vol",
+  });
+  chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+
+  new ResizeObserver(() => chart.resize(container.clientWidth, container.clientHeight)).observe(container);
+}
+
+function clearPriceLines() {
+  if (!candleSeries) return;
+  (candleSeries._priceLines || []).forEach(pl => candleSeries.removePriceLine(pl));
+  candleSeries._priceLines = [];
+}
+
+function addPriceLine(price, color, title) {
+  if (price === null || price === undefined) return;
+  const pl = candleSeries.createPriceLine({
+    price: price, color: color, lineWidth: 1,
+    lineStyle: LightweightCharts.LineStyle.Dashed,
+    axisLabelVisible: true, title: title,
+  });
+  candleSeries._priceLines = candleSeries._priceLines || [];
+  candleSeries._priceLines.push(pl);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Selecting a symbol / timeframe
+// ─────────────────────────────────────────────────────────────────────────
+function selectSymbol(idx) {
+  stopPlaying();
+  currentSymbolIdx = idx;
+  const s = flatSymbols[idx];
+
+  document.getElementById("empty-state").style.display = "none";
+  document.getElementById("replay-bar").style.display = "flex";
+  document.getElementById("hdr-symbol").textContent = s.symbol.replace(".NS", "");
+  document.getElementById("hdr-company").textContent =
+    `${s.company_name || ""}${s.sector ? " · " + s.sector : ""}`;
+
+  renderStatsRow(s);
+  renderReasonsPanel(s);
+  renderSidebar(document.getElementById("search").value);
+  loadTimeframe(currentTF);
+}
+
+function renderStatsRow(s) {
+  const row = document.getElementById("stats-row");
+  const stat = (label, value, color) =>
+    `<div class="stat"><span class="label">${label}</span>
+     <span class="value" style="${color ? 'color:'+color : ''}">${value}</span></div>`;
+  row.innerHTML = [
+    stat("Signal", s.signal_type),
+    stat("Quality", Math.round(s.quality_score)),
+    stat("Readiness", s.breakout_readiness_pct != null ? Math.round(s.breakout_readiness_pct) + "%" : "—"),
+    stat("Pole Move", s.pole_pct_move != null ? s.pole_pct_move.toFixed(1) + "%" : "—"),
+    stat("Flag Retrace", s.flag_retracement_pct != null ? s.flag_retracement_pct.toFixed(1) + "%" : "—"),
+    stat("Flag Range", s.flag_range_pct != null ? s.flag_range_pct.toFixed(1) + "%" : "—"),
+    stat("Flag Days", s.flag_duration_bars != null ? Math.round(s.flag_duration_bars) + "d" : "—"),
+    stat("Pivot", s.pivot_point != null ? "₹" + s.pivot_point.toFixed(2) : "—"),
+    stat("Entry", s.entry_price != null ? "₹" + s.entry_price.toFixed(2) : "—"),
+    stat("Stop", s.stop_loss_price != null ? "₹" + s.stop_loss_price.toFixed(2) : "—", "#f85149"),
+    stat("Target 1", s.target1 != null ? "₹" + s.target1.toFixed(2) : "—", "#3fb950"),
+    stat("Target 2", s.target2 != null ? "₹" + s.target2.toFixed(2) : "—", "#3fb950"),
+    stat("R:R (T2)", s.rr_t2 != null ? s.rr_t2.toFixed(2) : "—"),
+    stat("RS Rating", s.rs_rating != null ? Math.round(s.rs_rating) : "—"),
+  ].join("");
+}
+
+function esc(str) {
+  const d = document.createElement("div");
+  d.textContent = str == null ? "" : String(str);
+  return d.innerHTML;
+}
+
+function renderReasonsPanel(s) {
+  const panel = document.getElementById("reasons-panel");
+  panel.classList.add("visible");
+
+  document.getElementById("reasons-thesis").textContent = s.buy_thesis || "No summary available.";
+
+  const detailLines = [];
+  if (s.flag_retracement_pct != null || s.flag_range_pct != null) {
+    const bits = [];
+    if (s.flag_range_pct != null) bits.push(`${s.flag_range_pct.toFixed(1)}% high-low range`);
+    if (s.flag_retracement_pct != null) bits.push(`${s.flag_retracement_pct.toFixed(1)}% retracement`);
+    if (s.flag_duration_bars != null) bits.push(`${Math.round(s.flag_duration_bars)} trading days`);
+    detailLines.push(`<b>Tightness:</b> ${bits.join(" · ")}`);
+  }
+  if (s.readiness_reasons) detailLines.push(`<b>Readiness:</b> ${esc(s.readiness_reasons)}`);
+  if (s.scan_date) {
+    const isStale = s.scan_date !== DATA.scan_date;
+    detailLines.push(`<b>Detected:</b> ${esc(s.scan_date)}${isStale ? " (not today — still active from an earlier scan)" : ""}`);
+  }
+  if (s.exit_date) {
+    detailLines.push(`<b>Closed:</b> ${esc(s.exit_date)} at ₹${s.exit_price != null ? s.exit_price.toFixed(2) : "—"} (${esc(s.exit_type || "")})`);
+  }
+  document.getElementById("reasons-detail").innerHTML = detailLines.join(" &nbsp;·&nbsp; ");
+
+  const tags = (s.remarks || "").split(",").map(t => t.trim()).filter(Boolean);
+  document.getElementById("reasons-tags").innerHTML =
+    tags.map(t => `<span class="tag">${esc(t)}</span>`).join("");
+}
+
+function loadTimeframe(tf) {
+  currentTF = tf;
+  document.querySelectorAll("#tf-toggle button").forEach(b =>
+    b.classList.toggle("active", b.dataset.tf === tf));
+
+  const s = flatSymbols[currentSymbolIdx];
+  currentBars = (s.timeframes[tf] || []);
+  if (currentBars.length === 0) {
+    candleSeries.setData([]);
+    volumeSeries.setData([]);
+    return;
+  }
+
+  clearPriceLines();
+  addPriceLine(s.pivot_point, "#58a6ff", "Pivot");
+  addPriceLine(s.stop_loss_price, "#f85149", "Stop");
+  addPriceLine(s.target1, "#3fb950", "T1");
+  addPriceLine(s.target2, "#2ea043", "T2");
+
+  setupOverlaySeries();
+
+  replayIdx = findPatternStartIndex(s, currentBars);
+  renderAtIndex(replayIdx);
+
+  document.getElementById("replay-slider").min = 0;
+  document.getElementById("replay-slider").max = currentBars.length - 1;
+  document.getElementById("replay-slider").value = replayIdx;
+}
+
+// Pole line and flag channel are drawn as 2-point line series rather
+// than filled rectangles — lightweight-charts v4 has no native box/
+// rectangle primitive, but a 2-point LineSeries naturally only
+// occupies its own date range and won't extend across the rest of the
+// chart, which gives the same visual effect for a straight-edged
+// pattern like this.
+function setupOverlaySeries() {
+  [poleLineSeries, flagUpperSeries, flagLowerSeries].forEach(sr => {
+    if (sr) chart.removeSeries(sr);
+  });
+  poleLineSeries = chart.addLineSeries({
+    color: "#bc8cff", lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Solid,
+    priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+  });
+  flagUpperSeries = chart.addLineSeries({
+    color: "#d29922", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+    priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+  });
+  flagLowerSeries = chart.addLineSeries({
+    color: "#d29922", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+    priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+  });
+}
+
+// Nearest-bar close lookup, for anchoring the pole line's endpoints to
+// an actual traded price rather than an arbitrary y-value. Falls back
+// to the closest available bar if the exact date isn't present in
+// this timeframe's (possibly weekly/monthly-resampled) series.
+function findBarClose(bars, dateStr) {
+  if (!dateStr || bars.length === 0) return null;
+  let best = bars[0];
+  for (const b of bars) {
+    if (b.time <= dateStr) best = b; else break;
+  }
+  return best.c;
+}
+
+function findPatternStartIndex(s, bars) {
+  const target = s.pole_start_date;
+  if (!target) return 0;
+  let idx = bars.findIndex(b => b.time >= target);
+  if (idx === -1) idx = bars.length - 1;
+  return Math.max(0, idx - 8);   // a little pre-pattern context
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Replay rendering
+// ─────────────────────────────────────────────────────────────────────────
+function renderAtIndex(idx) {
+  replayIdx = Math.max(0, Math.min(idx, currentBars.length - 1));
+  const slice = currentBars.slice(0, replayIdx + 1);
+  candleSeries.setData(slice.map(b => ({ time: b.time, open: b.o, high: b.h, low: b.l, close: b.c })));
+  volumeSeries.setData(slice.map(b => ({
+    time: b.time, value: b.v,
+    color: b.c >= b.o ? "rgba(63,185,80,0.5)" : "rgba(248,81,73,0.5)",
+  })));
+
+  const s = flatSymbols[currentSymbolIdx];
+  const curDate = slice[slice.length - 1].time;
+  candleSeries.setMarkers(buildMarkers(s, curDate));
+  updatePatternOverlay(s, curDate);
+
+  chart.timeScale().fitContent();
+  document.getElementById("replay-date").textContent = curDate;
+  document.getElementById("replay-slider").value = replayIdx;
+}
+
+// The pole line only appears once replay has reached the pole's end
+// date, and the flag channel only once it's reached the flag's end —
+// so during playback you first watch the sharp move happen, THEN see
+// it confirmed as "that was the pole," then watch the consolidation,
+// THEN see the channel drawn — rather than spoiling the pattern by
+// showing the answer before the candles have even gotten there.
+function updatePatternOverlay(s, upToDate) {
+  if (s.pole_start_date && s.pole_end_date && upToDate >= s.pole_end_date) {
+    const startPrice = findBarClose(currentBars, s.pole_start_date);
+    const endPrice = findBarClose(currentBars, s.pole_end_date);
+    poleLineSeries.setData([
+      { time: s.pole_start_date, value: startPrice },
+      { time: s.pole_end_date, value: endPrice },
+    ]);
+  } else {
+    poleLineSeries.setData([]);
+  }
+
+  if (s.flag_start_date && s.flag_end_date && upToDate >= s.flag_end_date &&
+      s.flag_high != null && s.flag_low != null) {
+    flagUpperSeries.setData([
+      { time: s.flag_start_date, value: s.flag_high },
+      { time: s.flag_end_date, value: s.flag_high },
+    ]);
+    flagLowerSeries.setData([
+      { time: s.flag_start_date, value: s.flag_low },
+      { time: s.flag_end_date, value: s.flag_low },
+    ]);
+  } else {
+    flagUpperSeries.setData([]);
+    flagLowerSeries.setData([]);
+  }
+}
+
+function buildMarkers(s, upToDate) {
+  const markers = [];
+  const add = (date, position, color, shape, text) => {
+    if (date && date <= upToDate) {
+      markers.push({ time: date, position, color, shape, text });
+    }
+  };
+  add(s.pole_start_date, "belowBar", "#58a6ff", "arrowUp", "Pole");
+  add(s.flag_start_date, "aboveBar", "#d29922", "circle", "Flag");
+  add(s.breakout_date, "belowBar", "#3fb950", "arrowUp", "Breakout");
+  return markers;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Replay controls
+// ─────────────────────────────────────────────────────────────────────────
+function stopPlaying() {
+  playing = false;
+  document.getElementById("btn-play").textContent = "▶";
+  if (playTimer) { clearInterval(playTimer); playTimer = null; }
+}
+
+function togglePlay() {
+  if (currentBars.length === 0) return;
+  if (playing) { stopPlaying(); return; }
+  playing = true;
+  document.getElementById("btn-play").textContent = "⏸";
+  const speed = parseInt(document.getElementById("speed-select").value, 10);
+  playTimer = setInterval(() => {
+    if (replayIdx >= currentBars.length - 1) { stopPlaying(); return; }
+    renderAtIndex(replayIdx + 1);
+  }, speed);
+}
+
+function stepSymbol(delta) {
+  if (flatSymbols.length === 0) return;
+  let next = currentSymbolIdx + delta;
+  if (next < 0) next = flatSymbols.length - 1;
+  if (next >= flatSymbols.length) next = 0;
+  selectSymbol(next);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// "All Timeframes" popup — 1D + 1W + 1M side by side in a new window.
+// window.open("", ...) starts the popup as about:blank, which inherits
+// the opener's origin/JS realm — so LightweightCharts (already loaded
+// in THIS window) can create chart instances targeting DOM containers
+// that live in the POPUP's own document, with no need to re-inline
+// the ~160KB library a second time.
+// ─────────────────────────────────────────────────────────────────────────
+function openAllTimeframesWindow(s) {
+  const win = window.open("", "_blank", "width=1500,height=950");
+  if (!win) {
+    alert("Pop-up was blocked by the browser. Allow pop-ups for this page and try again.");
+    return;
+  }
+
+  win.document.write(`
+    <!DOCTYPE html><html><head><title>${esc(s.symbol)} — All Timeframes</title>
+    <style>
+      body { margin:0; background:#0d1117; color:#e6edf3; font-family:-apple-system,Segoe UI,Arial,sans-serif; }
+      #hdr { padding:12px 16px; border-bottom:1px solid #30363d; }
+      #hdr h1 { margin:0 0 4px 0; font-size:16px; }
+      #hdr .sub { color:#8b949e; font-size:12px; }
+      #hdr .thesis { margin-top:8px; font-size:12px; line-height:1.5; max-width:1100px; }
+      .row { display:flex; height:calc((100vh - 100px) / 3); border-bottom:1px solid #1c2128; }
+      .label {
+        width:36px; display:flex; align-items:center; justify-content:center;
+        writing-mode:vertical-rl; font-size:11px; font-weight:700; color:#8b949e;
+        border-right:1px solid #1c2128;
+      }
+      .chart { flex:1; }
+    </style></head>
+    <body>
+      <div id="hdr">
+        <h1>${esc(s.symbol.replace('.NS', ''))} <span class="sub">${esc(s.company_name || '')}</span></h1>
+        <div class="sub">${esc(s.signal_type || s.status || '')} · Quality ${Math.round(s.quality_score)} · Pivot ₹${s.pivot_point != null ? s.pivot_point.toFixed(2) : '—'}</div>
+        <div class="thesis">${esc(s.buy_thesis || '')}</div>
+      </div>
+      <div class="row"><div class="label">1D</div><div class="chart" id="c-1d"></div></div>
+      <div class="row"><div class="label">1W</div><div class="chart" id="c-1w"></div></div>
+      <div class="row"><div class="label">1M</div><div class="chart" id="c-1m"></div></div>
+    </body></html>
+  `);
+  win.document.close();
+
+  [["1D", "c-1d"], ["1W", "c-1w"], ["1M", "c-1m"]].forEach(([tf, elId]) => {
+    const container = win.document.getElementById(elId);
+    const bars = s.timeframes[tf] || [];
+    if (!container || bars.length === 0) return;
+
+    const c = LightweightCharts.createChart(container, {
+      layout: { background: { color: "#0d1117" }, textColor: "#e6edf3" },
+      grid: { vertLines: { color: "#1c2128" }, horzLines: { color: "#1c2128" } },
+      rightPriceScale: { borderColor: "#30363d" },
+      timeScale: { borderColor: "#30363d" },
+    });
+    const candles = c.addCandlestickSeries({
+      upColor: "#3fb950", downColor: "#f85149",
+      borderUpColor: "#3fb950", borderDownColor: "#f85149",
+      wickUpColor: "#3fb950", wickDownColor: "#f85149",
+    });
+    candles.setData(bars.map(b => ({ time: b.time, open: b.o, high: b.h, low: b.l, close: b.c })));
+
+    const addLine = (price, color, title) => {
+      if (price == null) return;
+      candles.createPriceLine({ price, color, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title });
+    };
+    addLine(s.pivot_point, "#58a6ff", "Pivot");
+    addLine(s.stop_loss_price, "#f85149", "Stop");
+    addLine(s.target1, "#3fb950", "T1");
+    addLine(s.target2, "#2ea043", "T2");
+
+    const markers = [];
+    if (s.pole_start_date) markers.push({ time: s.pole_start_date, position: "belowBar", color: "#58a6ff", shape: "arrowUp", text: "Pole" });
+    if (s.flag_start_date) markers.push({ time: s.flag_start_date, position: "aboveBar", color: "#d29922", shape: "circle", text: "Flag" });
+    if (s.breakout_date) markers.push({ time: s.breakout_date, position: "belowBar", color: "#3fb950", shape: "arrowUp", text: "Breakout" });
+    candles.setMarkers(markers);
+
+    if (s.pole_start_date && s.pole_end_date) {
+      const startPrice = findBarClose(bars, s.pole_start_date);
+      const endPrice = findBarClose(bars, s.pole_end_date);
+      const poleLine = c.addLineSeries({ color: "#bc8cff", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+      poleLine.setData([{ time: s.pole_start_date, value: startPrice }, { time: s.pole_end_date, value: endPrice }]);
+    }
+    if (s.flag_start_date && s.flag_end_date && s.flag_high != null && s.flag_low != null) {
+      const opts = { color: "#d29922", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false };
+      const upper = c.addLineSeries(opts), lower = c.addLineSeries(opts);
+      upper.setData([{ time: s.flag_start_date, value: s.flag_high }, { time: s.flag_end_date, value: s.flag_high }]);
+      lower.setData([{ time: s.flag_start_date, value: s.flag_low }, { time: s.flag_end_date, value: s.flag_low }]);
+    }
+
+    c.timeScale().fitContent();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Wiring
+// ─────────────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  initChart();
+  renderSidebar("");
+
+  document.getElementById("search").addEventListener("input", e => renderSidebar(e.target.value));
+
+  document.querySelectorAll("#tf-toggle button").forEach(b =>
+    b.addEventListener("click", () => { if (currentSymbolIdx >= 0) loadTimeframe(b.dataset.tf); }));
+
+  document.getElementById("btn-play").addEventListener("click", togglePlay);
+  document.getElementById("btn-jump-start").addEventListener("click", () => {
+    if (currentSymbolIdx < 0) return;
+    renderAtIndex(findPatternStartIndex(flatSymbols[currentSymbolIdx], currentBars));
+  });
+  document.getElementById("btn-jump-end").addEventListener("click", () => renderAtIndex(currentBars.length - 1));
+  document.getElementById("btn-step-back").addEventListener("click", () => { stopPlaying(); renderAtIndex(replayIdx - 1); });
+  document.getElementById("btn-step-fwd").addEventListener("click", () => { stopPlaying(); renderAtIndex(replayIdx + 1); });
+  document.getElementById("replay-slider").addEventListener("input", e => { stopPlaying(); renderAtIndex(parseInt(e.target.value, 10)); });
+  document.getElementById("btn-prev-symbol").addEventListener("click", () => stepSymbol(-1));
+  document.getElementById("btn-next-symbol").addEventListener("click", () => stepSymbol(1));
+  document.getElementById("btn-all-tf").addEventListener("click", () => {
+    if (currentSymbolIdx >= 0) openAllTimeframesWindow(flatSymbols[currentSymbolIdx]);
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+    else if (e.code === "ArrowLeft") { stopPlaying(); renderAtIndex(replayIdx - 1); }
+    else if (e.code === "ArrowRight") { stopPlaying(); renderAtIndex(replayIdx + 1); }
+    else if (e.code === "ArrowUp") { e.preventDefault(); stepSymbol(-1); }
+    else if (e.code === "ArrowDown") { e.preventDefault(); stepSymbol(1); }
+  });
+
+  if (flatSymbols.length > 0) selectSymbol(0);
+});
+</script>
+</body>
+</html>

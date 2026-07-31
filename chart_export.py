@@ -191,6 +191,16 @@ def _build_symbol_payload(row: pd.Series, tabs: list[str]) -> Optional[dict]:
             return None
         return val
 
+    # Retracement % measures how far price pulled back RELATIVE TO THE
+    # POLE — a huge pole can retrace only 20% and still leave a wide,
+    # choppy flag. Range % is the flag's own high-to-low width as a %
+    # of price — the more direct "how narrow was the consolidation
+    # itself" number. Both matter; neither alone is "tightness."
+    flag_high, flag_low = g("flag_high"), g("flag_low")
+    flag_range_pct = None
+    if flag_high is not None and flag_low is not None and flag_low > 0:
+        flag_range_pct = (flag_high - flag_low) / flag_low * 100.0
+
     return {
         "symbol": symbol,
         "company_name": g("company_name") or "",
@@ -207,6 +217,8 @@ def _build_symbol_payload(row: pd.Series, tabs: list[str]) -> Optional[dict]:
         "pole_pct_move": g("pole_pct_move"),
         "pole_atr_multiple": g("pole_atr_multiple"),
         "flag_retracement_pct": g("flag_retracement_pct"),
+        "flag_range_pct": flag_range_pct,
+        "flag_duration_bars": g("flag_duration_bars"),
         "volume_contraction_pct": g("volume_contraction_pct"),
         "pole_start_date": _iso(g("pole_start_date")),
         "pole_end_date": _iso(g("pole_end_date")),
@@ -261,10 +273,20 @@ def _build_setup_summary(row: pd.Series, g) -> str:
 
     flag_retr = g("flag_retracement_pct")
     vol_contr = g("volume_contraction_pct")
+    flag_high, flag_low = g("flag_high"), g("flag_low")
+    flag_days = g("flag_duration_bars")
     if flag_retr is not None:
         tightness = "a tight" if flag_retr <= 30 else "a healthy" if flag_retr <= 42 else "a loose"
+        range_note = ""
+        if flag_high is not None and flag_low is not None and flag_low > 0:
+            range_pct = (flag_high - flag_low) / flag_low * 100.0
+            range_note = f", ranging just {range_pct:.1f}% high-to-low" if range_pct <= 8 else \
+                         f", ranging {range_pct:.1f}% high-to-low"
+        days_note = f" over {int(flag_days)} trading days" if flag_days is not None else ""
         vol_note = f" while volume dried up {vol_contr:.0f}% versus the pole" if vol_contr is not None else ""
-        parts.append(f"The flag held {tightness} {flag_retr:.1f}% retracement{vol_note}")
+        parts.append(
+            f"The flag held {tightness} {flag_retr:.1f}% retracement{range_note}{days_note}{vol_note}"
+        )
 
     signal_type = g("signal_type") or ""
     if signal_type == "BREAKOUT NOW":
