@@ -220,18 +220,24 @@ def _log_data_completeness_summary(symbols: list[str]) -> None:
 def _download_batch(batch: list[str]) -> tuple[int, list[str], list[str]]:
     """Download a batch. Returns (n_saved, timed_out_syms, rate_limited_syms)."""
     starts = {sym: _incremental_start(sym) for sym in batch}
-    end = (date.today() + timedelta(days=1)).isoformat()
+
+    today = date.today()
+
     min_start = min(starts.values())
+
+# Everything already updated.
+    if min_start >= today.isoformat():
+      log.debug("Batch already up to date.")
+      return len(batch), [], []
+
+    end = (today + timedelta(days=1)).isoformat()
 
     saved = 0
     timed_out: list[str] = []
     rate_limited: list[str] = []
 
     try:
-        raw = yf.download(
-            batch, start=min_start, end=end,
-            auto_adjust=True, progress=False, threads=False,
-        )
+        raw = yf.download(batch, start=min_start, end=end, auto_adjust=True, progress=False, threads=False, group_by="ticker",)
     except Exception as exc:
         err = str(exc).lower()
         if "timeout" in err or "timed out" in err or "curl: (28)" in err:
@@ -244,15 +250,22 @@ def _download_batch(batch: list[str]) -> tuple[int, list[str], list[str]]:
         return 0, batch, []
 
     if raw is None or raw.empty:
-        log.warning("Empty response for batch — queuing all for retry")
-        return 0, batch, []
+      if min_start >= date.today().isoformat():
+        log.debug("No new market data available.")
+        return len(batch), [], []
+        
+      log.warning("Empty response for batch.")
+      return 0, batch, []
 
     for sym in batch:
         sym_start = starts[sym]
         df = _extract_symbol_robust(raw, sym, len(batch))
-        if df is None or df.empty:
-            timed_out.append(sym)
-            continue
+        if df is None:
+          timed_out.append(sym)
+          continue
+        if df.empty:
+          saved += 1
+          continue
 
         df = df[df.index >= pd.Timestamp(sym_start)]
         if df.empty:
@@ -272,22 +285,27 @@ def _extract_symbol_robust(raw: pd.DataFrame, symbol: str, n_syms: int) -> Optio
             df = raw.copy()
         else:
             if symbol not in raw.columns.get_level_values(1):
-                return None
+                return pd.DataFrame()
+
             df = raw.xs(symbol, axis=1, level=1).copy()
 
         df.columns = [str(c).strip() for c in df.columns]
+
         if "Adj Close" in df.columns and "Close" not in df.columns:
             df = df.rename(columns={"Adj Close": "Close"})
         elif "Adj Close" in df.columns:
             df = df.drop(columns=["Adj Close"])
 
         present = [c for c in OHLCV_COLS if c in df.columns]
+
         if len(present) < 4:
-            return None
+            return pd.DataFrame()
+
         df = df[present].dropna(how="all")
         df.index = pd.to_datetime(df.index)
         df = df[df["Close"] > 0]
-        return df if not df.empty else None
+
+        return df
 
     except Exception as e:
         log.debug("Extraction error %s: %s", symbol, e)
@@ -307,9 +325,13 @@ def _download_single_with_retry(symbol: str) -> bool:
                 auto_adjust=True,
             )
             if df.empty:
-                log.debug("%s: empty history (attempt %d)", symbol, attempt)
-                time.sleep(5 * attempt)
-                continue
+              if sym_start >= date.today().isoformat():
+                return True
+
+              log.debug("%s: empty history (attempt %d)", symbol, attempt)
+
+              time.sleep(5 * attempt)
+              continue
 
             df.index = pd.to_datetime(df.index).tz_localize(None)
             df.columns = [str(c) for c in df.columns]
@@ -375,13 +397,27 @@ def _parquet_path(symbol: str) -> Path:
 
 def _incremental_start(symbol: str) -> str:
     p = _parquet_path(symbol)
+
     if not p.exists():
         return "2000-01-01"
+
     try:
         df = pd.read_parquet(p, columns=["Close"])
+
+        if df.empty:
+            return "2000-01-01"
+
         df.index = pd.to_datetime(df.index)
-        last = df.index[-1].date()
+
+        last = max(df.index).date()
+        today = date.today()
+
+        # Already have today's candle
+        if last >= today:
+            return today.isoformat()
+
         return (last + timedelta(days=1)).isoformat()
+
     except Exception:
         return "2000-01-01"
 
